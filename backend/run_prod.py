@@ -8,7 +8,7 @@ import sys
 # 添加 backend 目录到路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import send_from_directory
+from flask import send_from_directory, abort
 from app import create_app
 from app.config import Config
 
@@ -38,11 +38,14 @@ def main():
         @app.route("/", defaults={"path": ""})
         @app.route("/<path:path>")
         def serve_frontend(path):
-            # API 路由已由蓝图处理，这里只处理前端路由
+            # 明确排除 API 路由，让蓝图处理
+            if path.startswith("api/") or path == "api":
+                abort(404)
+            # 尝试提供静态文件
             file_path = os.path.join(frontend_dist, path)
-            if path and os.path.exists(file_path):
+            if path and os.path.exists(file_path) and os.path.isfile(file_path):
                 return send_from_directory(frontend_dist, path)
-            # SPA fallback：所有未匹配路由返回 index.html
+            # SPA fallback：所有未匹配的前端路由返回 index.html
             return send_from_directory(frontend_dist, "index.html")
 
         print(f"[MiroFish] 前端静态文件目录: {frontend_dist}")
