@@ -8,7 +8,7 @@ import sys
 # 添加 backend 目录到路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import send_from_directory, abort
+from flask import send_from_directory, abort, jsonify
 from app import create_app
 from app.config import Config
 
@@ -26,6 +26,50 @@ def main():
 
     # 创建应用
     app = create_app()
+
+    # 调试端点：测试 LLM 连接
+    @app.route("/api/debug/llm-test", methods=["GET"])
+    def debug_llm_test():
+        import traceback
+        try:
+            from app.utils.llm_client import LLMClient
+            client = LLMClient()
+            result = client.chat(
+                messages=[{"role": "user", "content": "Say hello in one word"}],
+                max_tokens=10
+            )
+            return jsonify({
+                "success": True,
+                "response": result,
+                "model": client.model,
+                "base_url": client.base_url,
+                "api_key_prefix": client.api_key[:10] + "..." if client.api_key else None
+            })
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": traceback.format_exc()
+            }), 500
+
+    # 调试端点：测试网络连接
+    @app.route("/api/debug/network-test", methods=["GET"])
+    def debug_network_test():
+        import urllib.request
+        results = {}
+        urls = [
+            "https://openrouter.ai",
+            "https://api.openai.com",
+            "https://httpbin.org/get",
+        ]
+        for url in urls:
+            try:
+                req = urllib.request.urlopen(url, timeout=5)
+                results[url] = f"OK ({req.status})"
+            except Exception as e:
+                results[url] = f"FAILED: {type(e).__name__}: {str(e)}"
+        return jsonify(results)
 
     # 前端静态文件目录（构建产物）
     frontend_dist = os.path.join(
