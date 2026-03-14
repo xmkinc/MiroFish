@@ -23,10 +23,9 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install Python dependencies using uv into the system Python
-# (not a virtualenv, so regular python can find them)
+# Install Python dependencies using uv (creates .venv inside /app/backend)
 COPY backend/pyproject.toml backend/uv.lock ./backend/
-RUN cd backend && uv sync --frozen --no-dev --system
+RUN cd backend && uv sync --frozen --no-dev
 
 # Copy backend source
 COPY backend/ ./backend/
@@ -36,5 +35,5 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 5001
 
-# Run with system Python (packages installed to system via --system flag)
-CMD ["python", "backend/run_prod.py"]
+# Use the virtualenv Python so all packages are available
+CMD ["/app/backend/.venv/bin/python", "backend/run_prod.py"]
