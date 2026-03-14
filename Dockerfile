@@ -23,17 +23,18 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install Python dependencies
+# Install Python dependencies using uv into the system Python
+# (not a virtualenv, so regular python can find them)
 COPY backend/pyproject.toml backend/uv.lock ./backend/
-RUN cd backend && uv sync --frozen --no-dev
+RUN cd backend && uv sync --frozen --no-dev --system
 
 # Copy backend source
 COPY backend/ ./backend/
 
-# Copy built frontend into backend static folder
+# Copy built frontend into frontend/dist folder
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 5001
 
-# Use PORT env var from Railway (defaults to 5001)
+# Run with system Python (packages installed to system via --system flag)
 CMD ["python", "backend/run_prod.py"]
