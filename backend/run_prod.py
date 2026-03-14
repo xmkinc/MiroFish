@@ -8,7 +8,7 @@ import sys
 # 添加 backend 目录到路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import send_from_directory, abort, jsonify
+from flask import send_from_directory, jsonify, request
 from app import create_app
 from app.config import Config
 
@@ -53,57 +53,50 @@ def main():
                 "traceback": traceback.format_exc()
             }), 500
 
-    # 调试端点：测试网络连接
-    @app.route("/api/debug/network-test", methods=["GET"])
-    def debug_network_test():
-        import urllib.request
-        results = {}
-        urls = [
-            "https://openrouter.ai",
-            "https://api.openai.com",
-            "https://httpbin.org/get",
-        ]
-        for url in urls:
-            try:
-                req = urllib.request.urlopen(url, timeout=5)
-                results[url] = f"OK ({req.status})"
-            except Exception as e:
-                results[url] = f"FAILED: {type(e).__name__}: {str(e)}"
-        return jsonify(results)
-
     # 前端静态文件目录（构建产物）
     frontend_dist = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "frontend", "dist"
     )
 
-    # 如果存在前端构建产物，则由 Flask 提供静态文件服务
     if os.path.exists(frontend_dist):
-        @app.route("/", defaults={"path": ""})
-        @app.route("/<path:path>")
-        def serve_frontend(path):
-            # 明确排除 API 路由，让蓝图处理
-            if path.startswith("api/") or path == "api":
-                abort(404)
-            # 尝试提供静态文件
-            file_path = os.path.join(frontend_dist, path)
-            if path and os.path.exists(file_path) and os.path.isfile(file_path):
-                return send_from_directory(frontend_dist, path)
-            # SPA fallback：所有未匹配的前端路由返回 index.html
+        print(f"[MiroFish] 前端静态文件目录: {frontend_dist}")
+
+        # 静态文件路由（精确匹配 assets 目录）
+        @app.route("/assets/<path:filename>")
+        def serve_assets(filename):
+            return send_from_directory(os.path.join(frontend_dist, "assets"), filename)
+
+        # 根路径
+        @app.route("/")
+        def serve_index():
             return send_from_directory(frontend_dist, "index.html")
 
-        print(f"[MiroFish] 前端静态文件目录: {frontend_dist}")
+        # favicon 和其他根级静态文件
+        @app.route("/favicon.ico")
+        def serve_favicon():
+            return send_from_directory(frontend_dist, "favicon.ico")
+
+        # SPA fallback：所有非 API 的 404 返回 index.html
+        @app.errorhandler(404)
+        def spa_fallback(e):
+            # API 路由的 404 返回 JSON 错误
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Not found", "path": request.path}), 404
+            # 前端路由返回 index.html
+            index_path = os.path.join(frontend_dist, "index.html")
+            if os.path.exists(index_path):
+                return send_from_directory(frontend_dist, "index.html")
+            return jsonify({"error": "Not found"}), 404
+
     else:
         print(f"[MiroFish] 警告：未找到前端构建产物 ({frontend_dist})，仅提供 API 服务")
 
-    # 获取运行配置
-    # Railway 会注入 PORT 环境变量
+    # 获取运行配置（Railway 会注入 PORT 环境变量）
     port = int(os.environ.get("PORT", os.environ.get("FLASK_PORT", 5001)))
     host = os.environ.get("FLASK_HOST", "0.0.0.0")
 
     print(f"[MiroFish] 启动服务: http://{host}:{port}")
-
-    # 生产环境关闭 debug 模式
     app.run(host=host, port=port, debug=False, threaded=True)
 
 
