@@ -18,22 +18,18 @@ RUN cd frontend && npm run build
 # ============================================================
 FROM python:3.11-slim
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
-
 WORKDIR /app
 
-# Install Python dependencies using uv (creates .venv inside /app/backend)
-COPY backend/pyproject.toml backend/uv.lock ./backend/
-RUN cd backend && uv sync --frozen --no-dev
-
-# Copy backend source
+# Copy backend source first
 COPY backend/ ./backend/
+
+# Install Python dependencies using pip directly into system Python
+RUN pip install --no-cache-dir -e ./backend/
 
 # Copy built frontend into frontend/dist folder
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 5001
 
-# Use the virtualenv Python so all packages are available
-CMD ["/app/backend/.venv/bin/python", "backend/run_prod.py"]
+# Use system Python (packages installed via pip)
+CMD ["python", "backend/run_prod.py"]
